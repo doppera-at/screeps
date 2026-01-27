@@ -1,5 +1,5 @@
 import { ErrorMapper } from "utils/ErrorMapper";
-import { Logger, Level } from "utils/Logger";
+import { LoggerFactory, Logger, Level } from "utils/Logger";
 import { getName } from "utils/Names";
 
 declare global {
@@ -35,11 +35,21 @@ declare global {
     container: boolean;
   }
 
+  interface TaskMemory {
+    id: number;
+    type: string;
+    target: string;
+    assignedCreeps: string[];
+  }
 }
 // Syntax for adding properties to `global` (ex "global.log")
 declare const global: {
-  log: any;
+  log: LoggerFactory;
+
+
+  SPAWN_NAME: string;
 }
+global.SPAWN_NAME = "Spawn1";
 
 
 
@@ -63,9 +73,10 @@ let source: Source;
 function init() {
   if (initialized) return;
 
-  logger = new Logger("main", "main", Level.ALL);
+  global.log = new LoggerFactory(Level.DEBUG);
+  logger = global.log.getLogger("main");
 
-  spawn = Game.spawns["Spawn1"];
+  spawn = Game.spawns[global.SPAWN_NAME];
   source = spawn.room.find(FIND_SOURCES)[0];
 
   initialized = true;
@@ -111,11 +122,9 @@ function getDeliveryTarget(creep: Creep) {
 // ===== Main Loop =====
 
 export const loop = ErrorMapper.wrapLoop(() => {
-  console.log(`\n========== Tick: ${Game.time}`);
+  console.log(`\n========== Tick: ${Game.time} (R ${!initialized})`);
   init();
 
-  logger.info(`Logger works when declared outside the loop ^^`);
-  logger.info(`Initialized? ${initialized}`);
   logger.debug(`Spawn: ${spawn}, Source: ${source}`);
 
 
@@ -148,17 +157,21 @@ export const loop = ErrorMapper.wrapLoop(() => {
     if (!Memory.creeps[name].task) Memory.creeps[name].task = "harvest";
 
     const task = Memory.creeps[name].task;
-    logger.debug(`Creep: ${creep}, Task: ${task}`);
-
+    const targetId = Memory.creeps[name].target;
+    logger.debug(`Creep: ${creep}, Task: ${task}, Target: ${targetId}`);
 
     switch (task) {
       case "harvest":
-        if (ERR_NOT_IN_RANGE == creep.harvest(source))
-          creep.moveTo(source);
+        const harvestResult = creep.harvest(source);
+        logger.debug(`Harvest result`, harvestResult);
+        if (ERR_NOT_IN_RANGE == harvestResult) {
+          const moveResult = creep.moveTo(source);
+          logger.debug(`Move result`, moveResult);
+        }
         break;
 
       case "deliver":
-        let target = Game.getObjectById<AnyStructure | Source>(Memory.creeps[name].target!);
+        let target = Game.getObjectById<AnyStructure | Source>(targetId!);
         if (!target || target instanceof Source) {
           target = getDeliveryTarget(creep);
           logger.debug(`Target: ${target}`);
@@ -174,8 +187,13 @@ export const loop = ErrorMapper.wrapLoop(() => {
           break;
         }
 
-        if (ERR_NOT_IN_RANGE == creep.transfer(target, RESOURCE_ENERGY)) {
-          creep.moveTo(target);
+        const transferResult = creep.transfer(target, RESOURCE_ENERGY);
+        logger.debug(`Transfer result`, transferResult);
+        if (ERR_NOT_IN_RANGE == transferResult) {
+          const moveResult = creep.moveTo(target);
+          logger.debug(`Move result`, moveResult);
+        } else if (ERR_FULL == transferResult) {
+          delete Memory.creeps[name].target;
         }
         if (creep.store.getUsedCapacity() == 0) Memory.creeps[name].task = "harvest";
         break;
