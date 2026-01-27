@@ -43,7 +43,7 @@ nbproject
 *.sublime-project
 *.sublime-workspace
 .idea
-.vscode/
+.vscode
 
 # =========================
 # Operating System Files
@@ -91,3 +91,4 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
