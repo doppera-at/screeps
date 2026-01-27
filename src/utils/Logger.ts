@@ -9,23 +9,40 @@ export enum Level {
     ALL = 255,
 }
 
+export class LoggerFactory {
+
+    private level: Level;
+
+    constructor(level: Level) {
+        this.level = level;
+    }
+
+    public getLogger(module: string): Logger {
+        return new Logger(module, this.level);
+    }
+}
+
 export class Logger {
 
     private module: string;
-    private method: string;
+    private method?: string;
     private level: Level;
 
-    constructor(module: string, method: string, level: Level) {
+    private output: string;
+
+    constructor(module: string, level: Level, method?: string) {
         this.module = module;
         this.method = method;
         this.level = level;
+
+        this.output = `[${Level[level]}] ${this.module}` + (this.method ? `:${this.method}> ` : "> ");
     }
 
 
     public log(message: string, level: Level, result?: number) {
         if (level > this.level) return;
 
-        let resultString = `[${Level[level]}] ${this.module}:${this.method}> ${message}`;
+        let resultString = this.output + message;
         if (result !== undefined) resultString += ` (${result}) ${this.getResultString(result)}`;
 
         console.log(resultString);
@@ -58,6 +75,7 @@ export class Logger {
         switch (result) {
             case OK: return "OK";
             case ERR_NOT_FOUND: return "NotFound";
+            case ERR_FULL: return "Full";
             default: return "";
         }
     }
