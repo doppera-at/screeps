@@ -35,14 +35,13 @@ export class Logger {
         this.method = method;
         this.level = level;
 
-        this.output = `[${Level[level]}] ${this.module}` + (this.method ? `:${this.method}> ` : "> ");
+        this.output = `${this.module}` + (this.method ? `:${this.method}> ` : "> ");
     }
 
 
     public log(message: string, level: Level, result?: number) {
         if (level > this.level) return;
-
-        let resultString = this.output + message;
+        let resultString = `[${Level[level]}] ${this.output}${message}`;
         if (result !== undefined) resultString += ` (${result}) ${this.getResultString(result)}`;
 
         console.log(resultString);
