@@ -3,6 +3,7 @@ import { LoggerFactory, Logger, Level } from "utils/Logger";
 import { SpawnManager } from "manager/Spawn";
 import { TaskManager } from "manager/Task";
 import { getName } from "utils/Names";
+import { ActionType } from "utils/TypeDefinitions";
 
 declare global {
   /*
@@ -16,16 +17,16 @@ declare global {
   // Memory extension samples
   interface Memory {
     rooms: { [name: string]: RoomMemory; };
-    sources: { [name: string]: SourceMemory; };
+    sources: { [id: string]: SourceMemory; };
+    creeps: { [name: string]: CreepMemory };
     // uuid: number;
     // log: any;
   }
 
   interface CreepMemory {
-    // role: string;
     room: string;
-    working: boolean;
-    task: string;
+    task: number | null;
+    action: number | null;
     spawn: Id<StructureSpawn>;
     target?: Id<AnyStructure> | Id<Source>;
   }
@@ -48,6 +49,7 @@ declare global {
 declare const global: {
   log: LoggerFactory;
   spawn: SpawnManager;
+  task: TaskManager;
 
 
   SPAWN_NAME: string;
@@ -84,6 +86,8 @@ function init() {
 
   global.spawn = new SpawnManager(global.log.getLogger("SpawnManager"));
   global.spawn.addSpawn(spawn);
+
+  global.task = new TaskManager(global.log.getLogger("TaskManager"));
 
   initialized = true;
   logger.info(`Game reset, initialization complete.`);
@@ -138,6 +142,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
 
   global.spawn.run(global.SPAWN_NAME);
 
+  global.task.run();
 
 
 
@@ -154,23 +159,24 @@ export const loop = ErrorMapper.wrapLoop(() => {
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
 
-    if (!Memory.creeps[name].task) Memory.creeps[name].task = "harvest";
+    if (!Memory.creeps[name].action) Memory.creeps[name].action = ActionType.HARVEST;
 
-    const task = Memory.creeps[name].task;
+    const action = Memory.creeps[name].action;
     const targetId = Memory.creeps[name].target;
-    logger.debug(`Creep: ${creep}, Task: ${task}, Target: ${targetId}`);
+    logger.debug(`Creep: ${creep}, Action: ${action}, Target: ${targetId}`);
 
-    switch (task) {
-      case "harvest":
+    switch (action) {
+      case ActionType.HARVEST:
         const harvestResult = creep.harvest(source);
         logger.debug(`Harvest result`, harvestResult);
         if (ERR_NOT_IN_RANGE == harvestResult) {
           const moveResult = creep.moveTo(source);
           logger.debug(`Move result`, moveResult);
         }
+        if (creep.store.getFreeCapacity() == 0) Memory.creeps[name].action = ActionType.DELIVER;
         break;
 
-      case "deliver":
+      case ActionType.DELIVER:
         let target = Game.getObjectById<AnyStructure | Source>(targetId!);
         if (!target || target instanceof Source) {
           target = getDeliveryTarget(creep);
@@ -195,18 +201,11 @@ export const loop = ErrorMapper.wrapLoop(() => {
         } else if (ERR_FULL == transferResult) {
           delete Memory.creeps[name].target;
         }
-        if (creep.store.getUsedCapacity() == 0) Memory.creeps[name].task = "harvest";
+        if (creep.store.getUsedCapacity() == 0) Memory.creeps[name].action = ActionType.HARVEST;
         break;
       default:
-        logger.error(`Unknown task ${task} for creep ${name}`);
+        logger.error(`Unknown action ${action} for creep ${name}`);
         break;
-    }
-
-    if (task == "harvest") {
-      if (ERR_NOT_IN_RANGE == creep.harvest(source)) {
-        creep.moveTo(source);
-      }
-      if (creep.store.getFreeCapacity() == 0) Memory.creeps[name].task = "deliver";
     }
 
   }
