@@ -1,5 +1,7 @@
 import { ErrorMapper } from "utils/ErrorMapper";
 import { LoggerFactory, Logger, Level } from "utils/Logger";
+import { SpawnManager } from "manager/Spawn";
+import { TaskManager } from "manager/Task";
 import { getName } from "utils/Names";
 
 declare global {
@@ -45,6 +47,7 @@ declare global {
 // Syntax for adding properties to `global` (ex "global.log")
 declare const global: {
   log: LoggerFactory;
+  spawn: SpawnManager;
 
 
   SPAWN_NAME: string;
@@ -78,6 +81,9 @@ function init() {
 
   spawn = Game.spawns[global.SPAWN_NAME];
   source = spawn.room.find(FIND_SOURCES)[0];
+
+  global.spawn = new SpawnManager(global.log.getLogger("SpawnManager"));
+  global.spawn.addSpawn(spawn);
 
   initialized = true;
   logger.info(`Game reset, initialization complete.`);
@@ -126,20 +132,14 @@ export const loop = ErrorMapper.wrapLoop(() => {
   init();
 
   logger.debug(`Spawn: ${spawn}, Source: ${source}`);
+  global.spawn.stat();
 
 
 
-  if (Object.keys(Game.creeps).length < 2) {
-    logger.debug(`getName: ${getName()}`);
-    spawn.spawnCreep([WORK, CARRY, MOVE], getName(), {
-      memory: {
-        task: "harvest",
-        spawn: spawn.id,
-        room: spawn.room.name,
-        working: true,
-      }
-    });
-  }
+  global.spawn.run(global.SPAWN_NAME);
+
+
+
 
 
   // Automatically delete memory of missing creeps
