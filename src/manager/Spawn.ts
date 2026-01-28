@@ -1,5 +1,6 @@
 import { Logger } from "../utils/Logger";
 import { getName } from "../utils/Names";
+import { ActionType, TaskType } from "../utils/TypeDefinitions";
 
 
 export class SpawnManager {
@@ -39,10 +40,10 @@ export class SpawnManager {
       }
       const result = spawn.spawnCreep([WORK, CARRY, MOVE], creepName, {
         memory: {
-          task: "harvest",
+          task: TaskType.HARDCODED,
+          action: ActionType.HARVEST,
           spawn: spawn.id,
           room: spawn.room.name,
-          working: true,
         }
       });
       this.logger.info(`Attempt of spawning a creep`, result);
