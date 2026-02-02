@@ -4,6 +4,7 @@ import { SpawnManager } from "manager/Spawn";
 import { TaskManager } from "manager/Task";
 import { getName } from "utils/Names";
 import { ActionType } from "utils/TypeDefinitions";
+import { Result, Ok, Err, Error, ResultType, ErrorType } from "utils/Result";
 
 declare global {
   /*
@@ -25,10 +26,10 @@ declare global {
 
   interface CreepMemory {
     room: string;
-    task: number | null;
-    action: number | null;
+    task: number | undefined;
+    action: number | undefined;
     spawn: Id<StructureSpawn>;
-    target?: Id<AnyStructure> | Id<Source>;
+    target?: Id<AnyStructure> | Id<Source> | undefined;
   }
 
   interface SourceMemory {
@@ -54,7 +55,7 @@ declare const global: {
 
   SPAWN_NAME: string;
 }
-global.SPAWN_NAME = "Spawn1";
+global.SPAWN_NAME = "Landing";
 
 
 
@@ -129,6 +130,14 @@ function getDeliveryTarget(creep: Creep) {
 }
 
 
+
+function resultTest(successful: boolean): Result<boolean, Error> {
+  if (successful) {
+    return new Ok(ResultType.OK, successful);
+  }
+  return new Err(new Error(ErrorType.INVALID_TARGET, "Invalid target provided"));
+}
+
 // ===== Main Loop =====
 
 export const loop = ErrorMapper.wrapLoop(() => {
@@ -144,6 +153,14 @@ export const loop = ErrorMapper.wrapLoop(() => {
 
   global.task.run();
 
+  const testResult = resultTest(true);
+  logger.debug(`Type of testResult: ${typeof testResult}`);
+  logger.debug(`Result is ok? ${testResult.ok()}`)
+  if (testResult.ok()) {
+    logger.debug(`Value inside result: ${testResult.getValue()}`);
+  } else {
+    logger.debug(`Error ${testResult.getError()?.getType()}: ${testResult.getError()?.getMsg()}`);
+  }
 
 
 
@@ -159,9 +176,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
 
-    if (!Memory.creeps[name].action) Memory.creeps[name].action = ActionType.HARVEST;
-
     const action = Memory.creeps[name].action;
+    if (!action) Memory.creeps[name].action = ActionType.HARVEST;
+
     const targetId = Memory.creeps[name].target;
     logger.debug(`Creep: ${creep}, Action: ${action}, Target: ${targetId}`);
 
@@ -173,7 +190,11 @@ export const loop = ErrorMapper.wrapLoop(() => {
           const moveResult = creep.moveTo(source);
           logger.debug(`Move result`, moveResult);
         }
-        if (creep.store.getFreeCapacity() == 0) Memory.creeps[name].action = ActionType.DELIVER;
+        logger.debug(`FreeCapacity: ${creep.store.getFreeCapacity()} == 0? ${creep.store.getFreeCapacity() == 0}`)
+        if (creep.store.getFreeCapacity() == 0) {
+          logger.debug(`Switching Action to: ${ActionType.DELIVER}`);
+          Memory.creeps[name].action = ActionType.DELIVER;
+        }
         break;
 
       case ActionType.DELIVER:
