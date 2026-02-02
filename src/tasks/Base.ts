@@ -1,13 +1,16 @@
 import { TaskType } from "../utils/TypeDefinitions";
+import { Logger } from "../utils/Logger";
 
 export class BaseTask {
 
-  private id: number;
-  private type: TaskType
+  protected id: number;
+  protected type: TaskType;
+  protected logger: Logger;
 
-  constructor(id: number, type: TaskType) {
+  constructor(id: number, type: TaskType, logger: Logger) {
     this.id = id;
     this.type = type;
+    this.logger = logger;
   }
 
 
@@ -22,10 +25,10 @@ export class BaseTask {
 
 export class CreepTask extends BaseTask {
 
-  private creep: Creep;
+  protected creep: Creep;
 
-  constructor(id: number, type: TaskType, creep: Creep) {
-    super(id, type);
+  constructor(id: number, type: TaskType, creep: Creep, logger: Logger) {
+    super(id, type, logger);
     this.creep = creep;
   }
 
