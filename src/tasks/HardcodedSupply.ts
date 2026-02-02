@@ -1,68 +1,101 @@
-import { CreepTask } from "Base";
+import { CreepTask } from "../tasks/Base";
 import { TaskType, ActionType } from "../utils/TypeDefinitions";
+import { Logger } from "../utils/Logger";
 
 export class HardcodedSupplyTask extends CreepTask {
 
-  constructor(id: number, creep: Creep) {
-    super(id, TaskType.Hardcoded, creep);
+  constructor(id: number, creep: Creep, logger: Logger) {
+    super(id, TaskType.HARDCODED, creep, logger);
   }
 
 
-  run() {
-    const targetId = Memory.creeps[name].target;
-    const action = Memory.creeps[name].action;
+  getDeliveryTarget(creep: Creep) {
+    const amount = creep.store.getUsedCapacity();
+    this.logger.debug(`getDeliveryTarget: Amount ${amount}`)
 
-    this.logger.debug(`Creep: ${this.creep}, Type: ${this.type}, Target: ${targetId}, Action: ${action}`);
+    const targets = creep.room.find(FIND_MY_STRUCTURES, {
+      filter: (structure) => {
+        switch (structure.structureType) {
+          case STRUCTURE_EXTENSION:
+          case STRUCTURE_SPAWN:
+          case STRUCTURE_TOWER:
+            if (structure.store.getFreeCapacity(RESOURCE_ENERGY) >= amount) {
+              return true;
+            }
+          default:
+            break;
+        }
+        return false;
+      }
+    });
+    this.logger.debug(`Found ${targets.length} delivery targets`);
+
+    if (targets.length > 0) {
+      const target = creep.pos.findClosestByPath(targets);
+      this.logger.debug(`target: ${target}`);
+      // Memory.creeps[creep.name].target = target.id;
+      return target;
+    }
+
+    return creep.room.controller || null;
+  }
+
+
+
+  run() {
+    const creep: Creep = this.creep;
+    const action = Memory.creeps[creep.name].action;
+
+    this.logger.debug(`Creep: ${this.creep}, Type: ${this.type}, Target: ${Memory.creeps[creep.name].target}, Action: ${action}`);
 
     switch (action) {
       case ActionType.HARVEST:
-        const harvestResult = creep.harvest(source);
+        const harvestTargetId: Id<Source> | Id<AnyStructure> | undefined = Memory.creeps[creep.name].target;
+        if (!harvestTargetId) {
+          this.logger.warn(`No Target for HardcodedSupply Task, requesting new one`);
+          return ERR_NOT_FOUND;
+        }
+        const harvestTarget: Source | AnyStructure | null = Game.getObjectById(harvestTargetId);
+        if (!harvestTarget || !(harvestTarget instanceof Source)) {
+          this.logger.warn(`Invalid Target (not set or not a Source): ${harvestTargetId}`);
+          return ERR_INVALID_TARGET;
+        }
+        const harvestResult = creep.harvest(harvestTarget);
         this.logger.debug(`Harvest result`, harvestResult);
         if (ERR_NOT_IN_RANGE == harvestResult) {
-          const moveResult = creep.moveTo(source);
+          const moveResult = creep.moveTo(harvestTarget);
           this.logger.debug(`Move result`, moveResult);
+          return harvestResult;
         }
-        if (creep.store.getFreeCapacity() == 0) Memory.creeps[name].task = "deliver";
+        if (creep.store.getFreeCapacity() == 0) Memory.creeps[creep.name].action = ActionType.DELIVER;
         break;
 
       case ActionType.DELIVER:
-        let target = Game.getObjectById<AnyStructure | Source>(targetId!);
-        if (!target || target instanceof Source) {
-          target = getDeliveryTarget(creep);
-          logger.debug(`Target: ${target}`);
-          if (target) Memory.creeps[name].target = target.id;
-          else {
-            logger.error(`No delivery target found for creep ${name}`);
-            break;
-          }
+        const deliveryTargetId: Id<Source> | Id<AnyStructure> | undefined = Memory.creeps[creep.name].target;
+        if (!deliveryTargetId) {
+          this.logger.warn(`No Target for HardcodedSupply-Task, requesting new one`);
+          return ERR_NOT_FOUND;
         }
-
-        if (target instanceof Source) {
-          delete Memory.creeps[name].target;
-          break;
+        const deliveryTarget: Source | AnyStructure | null = Game.getObjectById(deliveryTargetId);
+        if (!deliveryTarget || deliveryTarget instanceof Source) {
+          this.logger.warn(`Invalid Target (not set or a Source): ${deliveryTargetId}`);
+          return ERR_INVALID_TARGET;
         }
-
-        const transferResult = creep.transfer(target, RESOURCE_ENERGY);
-        logger.debug(`Transfer result`, transferResult);
-        if (ERR_NOT_IN_RANGE == transferResult) {
-          const moveResult = creep.moveTo(target);
-          logger.debug(`Move result`, moveResult);
-        } else if (ERR_FULL == transferResult) {
-          delete Memory.creeps[name].target;
+        const deliveryResult = creep.transfer(deliveryTarget, RESOURCE_ENERGY);
+        this.logger.debug(`Delivery result`, deliveryResult);
+        if (ERR_NOT_IN_RANGE == deliveryResult) {
+          const moveResult = creep.moveTo(deliveryTarget);
+          this.logger.debug(`Move result`, moveResult);
+          return deliveryResult;
         }
-        if (creep.store.getUsedCapacity() == 0) Memory.creeps[name].task = "harvest";
+        if (creep.store.getUsedCapacity() == 0) Memory.creeps[creep.name].action = ActionType.HARVEST;
         break;
       default:
-        logger.error(`Unknown task ${task} for creep ${name}`);
-        break;
+        this.logger.error(`Unknown action ${action} for creep ${creep.name}`);
+        return ERR_INVALID_ARGS;
     }
 
-    if (task == "harvest") {
-      if (ERR_NOT_IN_RANGE == creep.harvest(source)) {
-        creep.moveTo(source);
-      }
-    }
-
+    return OK;
   }
 
 }
